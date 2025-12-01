@@ -5,6 +5,47 @@ import io
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Foliador Pro Web", layout="centered")
 
+# ==========================================
+# 🔐 SISTEMA DE SEGURIDAD (CANDADO)
+# ==========================================
+def check_password():
+    """Retorna True solo si el usuario ingresa la clave correcta."""
+
+    def password_entered():
+        """Verifica la contraseña cuando el usuario la escribe."""
+        if st.session_state["password_input"] == st.secrets["password"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password_input"]  # Borrar del historial por seguridad
+        else:
+            st.session_state["password_correct"] = False
+
+    # Si ya ingresó correctamente antes, dejar pasar
+    if st.session_state.get("password_correct", False):
+        return True
+
+    # Si no ha ingresado, mostrar el campo de contraseña
+    st.title("🔒 Acceso Restringido")
+    st.text_input(
+        "Por favor, ingresa la contraseña de acceso:", 
+        type="password", 
+        on_change=password_entered, 
+        key="password_input"
+    )
+    
+    # Mensaje de error si falló
+    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+        st.error("❌ Contraseña incorrecta. Intente de nuevo.")
+
+    return False
+
+# SI EL USUARIO NO PASA LA SEGURIDAD, DETENER TODO AQUÍ
+if not check_password():
+    st.stop()
+
+# ==========================================
+# 📂 APLICACIÓN PRINCIPAL (FOLIADOR)
+# ==========================================
+
 # --- ESTILOS CSS ---
 st.markdown("""
     <style>
@@ -32,22 +73,15 @@ with st.sidebar:
     with col1:
         inicio = st.number_input("Iniciar en:", min_value=1, value=1)
     with col2:
-        # MEJORA 1: MÁS OPCIONES DE DÍGITOS
         opciones_ceros = [
-            "1 dígito (1)",
-            "2 dígitos (01)", 
-            "3 dígitos (001)", 
-            "4 dígitos (0001)", 
-            "5 dígitos (00001)",
-            "6 dígitos (000001)"
+            "1 dígito (1)", "2 dígitos (01)", "3 dígitos (001)", 
+            "4 dígitos (0001)", "5 dígitos (00001)", "6 dígitos (000001)"
         ]
-        ceros_texto = st.selectbox("Ceros:", opciones_ceros, index=2) # Por defecto 3 dígitos
-        # Extraemos el número del texto (el primer caracter)
+        ceros_texto = st.selectbox("Ceros:", opciones_ceros, index=2)
         cant_ceros = int(ceros_texto.split()[0])
     
     st.divider() 
     
-    # MEJORA 2: TODAS LAS TIPOGRAFÍAS BASE 14
     fuente_map = {
         "Courier - Negrita (Sello)": "Courier-Bold",
         "Courier - Normal": "Courier",
@@ -63,13 +97,17 @@ with st.sidebar:
     font_code = fuente_map[fuente_elegida]
     
     tamano = st.slider("Tamaño de letra:", 8, 48, 14)
-    
     color_hex = st.color_picker("Color de tinta:", "#000000")
     
     posicion = st.selectbox("Ubicación:", 
                             ["Arriba Derecha", "Abajo Derecha", "Arriba Izquierda", "Abajo Izquierda", "Abajo Centro", "Arriba Centro"])
     
     espaciado = st.checkbox("Espaciado ancho (0 0 1)")
+
+    # Botón para cerrar sesión
+    if st.button("Cerrar Sesión"):
+        st.session_state["password_correct"] = False
+        st.rerun()
 
 # --- FUNCIÓN HELPER COLOR ---
 def hex_to_rgb(hex_color):
@@ -84,7 +122,6 @@ if uploaded_file is not None:
     
     if st.button("🚀 FOLIAR DOCUMENTO AHORA"):
         try:
-            # Leer archivo
             pdf_bytes = uploaded_file.read()
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             total_pages = len(doc)
@@ -93,14 +130,12 @@ if uploaded_file is not None:
             color_rgb = hex_to_rgb(color_hex)
             
             for i, page in enumerate(doc):
-                # Lógica inversa
                 numero_calculado = (inicio + total_pages - 1) - i
                 
                 num_str = f"{numero_calculado:0{cant_ceros}d}"
                 if espaciado: num_str = " ".join(num_str)
                 texto_final = f"{prefijo} {num_str}"
                 
-                # Posición
                 w = page.rect.width
                 h = page.rect.height
                 mx, my = 70, 40
@@ -118,7 +153,6 @@ if uploaded_file is not None:
                 
                 progress_bar.progress((i + 1) / total_pages)
 
-            # Guardar
             output_buffer = io.BytesIO()
             doc.save(output_buffer)
             doc.close()
